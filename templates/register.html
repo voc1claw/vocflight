@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOCFlight Register</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-page">
+    <div class="page-aura aura-one"></div>
+    <div class="page-aura aura-two"></div>
+    <div class="page-grid"></div>
+
+    <main class="auth-shell">
+        <section class="auth-card">
+            <div class="auth-brand">
+                <div class="logo-icon">&#9992;</div>
+                <div>
+                    <div class="sidebar-kicker">Member Signup</div>
+                    <h1 class="auth-title">Create An Account</h1>
+                    <p class="auth-subtitle">Members can use the chatbot. Admin controls stay in the separate admin dashboard.</p>
+                </div>
+            </div>
+
+            {% if error %}
+            <div class="auth-alert">{{ error }}</div>
+            {% endif %}
+
+            {% if not store_configured %}
+            <div class="auth-alert">Supabase is not configured yet. Set <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</div>
+            {% endif %}
+
+            {% if not registration_enabled %}
+            <div class="auth-alert">Registration is currently disabled by the admin.</div>
+            {% endif %}
+
+            <form method="POST" class="auth-form">
+                <label class="auth-field">
+                    <span>Username</span>
+                    <input type="text" name="username" autocomplete="username" required {% if not registration_enabled or not store_configured %}disabled{% endif %}>
+                </label>
+                <label class="auth-field">
+                    <span>Password</span>
+                    <input type="password" name="password" autocomplete="new-password" required {% if not registration_enabled or not store_configured %}disabled{% endif %}>
+                </label>
+                {% if registration_requires_password %}
+                <label class="auth-field">
+                    <span>Registration Password</span>
+                    <input type="password" name="registration_password" autocomplete="off" required {% if not registration_enabled or not store_configured %}disabled{% endif %}>
+                </label>
+                {% endif %}
+                <button class="auth-submit" type="submit" {% if not registration_enabled or not store_configured %}disabled{% endif %}>Create Member Account</button>
+            </form>
+
+            <div class="auth-footer">
+                <span>Already have an account?</span>
+                <a href="/login">Back to login</a>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

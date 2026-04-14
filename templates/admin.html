@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOCFlight Admin</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="admin-page">
+    <div class="page-aura aura-one"></div>
+    <div class="page-aura aura-two"></div>
+    <div class="page-grid"></div>
+
+    <main class="admin-shell">
+        <header class="admin-topbar">
+            <div>
+                <div class="sidebar-kicker">Administration</div>
+                <h1 class="admin-title">VOCFlight Admin Dashboard</h1>
+                <p class="admin-subtitle">Control registration, member accounts, allowed AI models, and activity logs.</p>
+            </div>
+            <div class="admin-actions">
+                <a class="admin-link-btn" href="/">Open Chatbot</a>
+                <form action="/logout" method="POST">
+                    <button class="admin-logout-btn" type="submit">Logout</button>
+                </form>
+            </div>
+        </header>
+
+        <section class="admin-grid">
+            <article class="admin-card">
+                <div class="admin-card-header">
+                    <div>
+                        <div class="sidebar-kicker">Access Control</div>
+                        <h2>Registration Settings</h2>
+                    </div>
+                    <div class="status-pill {% if config.registration_enabled %}admin-on{% else %}muted{% endif %}" id="registration-status-pill">
+                        {% if config.registration_enabled %}Registration On{% else %}Registration Off{% endif %}
+                    </div>
+                </div>
+                <form id="settings-form" class="admin-form">
+                    <label class="admin-switch">
+                        <input type="checkbox" id="registration-enabled" {% if config.registration_enabled %}checked{% endif %}>
+                        <span>Enable member registration</span>
+                    </label>
+
+                    <div class="admin-field">
+                        <label for="registration-password">Registration Password</label>
+                        <input type="password" id="registration-password" placeholder="{% if config.registration_password_hash %}Password is currently set{% else %}No password required{% endif %}">
+                        <small>Leave blank to keep the current state. Use clear to remove the password requirement.</small>
+                    </div>
+
+                    <label class="admin-switch">
+                        <input type="checkbox" id="clear-registration-password">
+                        <span>Remove registration password</span>
+                    </label>
+
+                    <div class="admin-models">
+                        <div class="sidebar-kicker">Available Models</div>
+                        {% for model in all_models %}
+                        <label class="admin-model-option">
+                            <input
+                                type="checkbox"
+                                class="model-checkbox"
+                                value="{{ model.id }}"
+                                {% if model.id in config.enabled_models %}checked{% endif %}
+                            >
+                            <span>{{ model.label }}</span>
+                            <small>{{ model.tier|upper }}</small>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="admin-form-actions">
+                        <button class="auth-submit" type="submit">Save Settings</button>
+                        <div class="admin-inline-status" id="settings-status"></div>
+                    </div>
+                </form>
+            </article>
+
+            <article class="admin-card">
+                <div class="admin-card-header">
+                    <div>
+                        <div class="sidebar-kicker">Users</div>
+                        <h2>Accounts</h2>
+                    </div>
+                    <div class="status-pill">{{ users|length }} total</div>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            {% for user in users %}
+                            <tr data-user-id="{{ user.id }}">
+                                <td data-label="Username">{{ user.username }}</td>
+                                <td data-label="Role">{{ user.role|upper }}</td>
+                                <td data-label="Status">{{ 'ACTIVE' if user.is_active else 'DISABLED' }}</td>
+                                <td data-label="Created">{{ user.created_at or '' }}</td>
+                                <td data-label="Action">
+                                    {% if user.id != bootstrap.user.id %}
+                                    <button class="admin-delete-btn delete-user-btn" data-user-id="{{ user.id }}" data-username="{{ user.username }}">Delete</button>
+                                    {% else %}
+                                    <span class="status-pill muted">Current Admin</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section class="admin-grid admin-grid-logs">
+            <article class="admin-card">
+                <div class="admin-card-header">
+                    <div>
+                        <div class="sidebar-kicker">Audit Trail</div>
+                        <h2>Administration Logs</h2>
+                    </div>
+                </div>
+                <div class="admin-log-list" id="admin-log-list">
+                    {% for log in admin_logs %}
+                    <div class="admin-log-item">
+                        <div class="admin-log-top">
+                            <strong>{{ log.action }}</strong>
+                            <span>{{ log.admin_username }}</span>
+                            <span>{{ log.created_at }}</span>
+                        </div>
+                        <pre>{{ log.details|tojson(indent=2) }}</pre>
+                    </div>
+                    {% else %}
+                    <div class="admin-empty">No admin logs yet.</div>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="admin-card">
+                <div class="admin-card-header">
+                    <div>
+                        <div class="sidebar-kicker">User Activity</div>
+                        <h2>Chat Logs</h2>
+                    </div>
+                    <button class="admin-refresh-btn" id="refresh-logs-btn" type="button">Refresh</button>
+                </div>
+                <div class="admin-log-list" id="chat-log-list">
+                    {% for log in chat_logs %}
+                    <div class="admin-log-item">
+                        <div class="admin-log-top">
+                            <strong>{{ log.username }}</strong>
+                            <span>{{ log.user_role|upper }}</span>
+                            <span>{{ log.session_id or 'local-session' }}</span>
+                            <span>{{ log.created_at }}</span>
+                        </div>
+                        <pre>{{ log.request_payload|tojson(indent=2) }}</pre>
+                        <pre>{{ log.response_payload|tojson(indent=2) }}</pre>
+                    </div>
+                    {% else %}
+                    <div class="admin-empty">No chat logs yet.</div>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <script>
+        window.VOCFLIGHT_ADMIN_BOOTSTRAP = {{ {
+            "config": config,
+            "users": users,
+            "admin_logs": admin_logs,
+            "chat_logs": chat_logs,
+            "current_user": bootstrap.user
+        }|tojson }};
+    </script>
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

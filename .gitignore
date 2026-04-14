@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+.vercel/
+flight/sq-profile/
+flight/.cache/
+flight/*.png
+flight/*.txt
+flight/.claude/
+flight/references/
+cookies.txt
+_compact_check.png
+public/

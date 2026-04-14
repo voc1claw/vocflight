@@ -1,0 +1,32 @@
+{
+  "no_fly_airlines": [
+    "Air India",
+    "Ethiopian",
+    "Kenya Airways",
+    "Royal Jordanian",
+    "Thai Airways"
+  ],
+  "general_rules": {
+    "cabin_minimum": "business",
+    "never_search_economy": true,
+    "cabin_rule": "NEVER search or display economy class. Do not open economy sessions, do not include economy prices in output, do not show economy comparisons or deltas. Business class is the only cabin to search. This saves tokens, sessions, and time.",
+    "ticketing_strategy": "Even if a trip is round-trip, always check two separate one-way tickets as options. If a trip is complex, check one-way but also do multi-city checks.",
+    "date_range_expansion": {
+      "enabled": true,
+      "description": "When the user specifies a flexible or open-ended departure window (e.g., 'anytime after April 6', 'leaving between May 1-10', 'early June'), search EVERY individual eligible departure date separately. Each date gets its own search with the corresponding return date calculated from the user's duration requirement (e.g., 'returning after 30 days' means departure + 30 days). Present results grouped by departure date so the user can compare across dates.",
+      "default_range_days": 7,
+      "max_range_days": 14,
+      "rules": [
+        "If user says 'after DATE', search DATE+1 through DATE+1+default_range_days (7 consecutive dates).",
+        "If user says 'between DATE1 and DATE2', search every date in that range.",
+        "If user says 'early/mid/late MONTH', search the corresponding ~10-day window.",
+        "If user says 'anytime in MONTH', search representative dates spread across the month (1st, 5th, 10th, 15th, 20th, 25th).",
+        "Return dates are calculated per the user's duration (e.g., +30 days from each departure).",
+        "Each departure date is a separate search — do NOT collapse them into a single search.",
+        "Group output by departure date: '--- April 7 → May 7 ---', '--- April 8 → May 8 ---', etc.",
+        "The user can override the range by specifying exact dates or saying 'just check April 10'.",
+        "Respect the VM session limit (4-5 max). Batch dates across multiple rounds if needed."
+      ]
+    }
+  }
+}

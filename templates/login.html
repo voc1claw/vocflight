@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOCFlight Login</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-page">
+    <div class="page-aura aura-one"></div>
+    <div class="page-aura aura-two"></div>
+    <div class="page-grid"></div>
+
+    <main class="auth-shell">
+        <section class="auth-card">
+            <div class="auth-brand">
+                <div class="logo-icon">&#9992;</div>
+                <div>
+                    <div class="sidebar-kicker">Secure Access</div>
+                    <h1 class="auth-title">VOCFlight</h1>
+                    <p class="auth-subtitle">Sign in to use the chatbot and your private workspace.</p>
+                </div>
+            </div>
+
+            {% if error %}
+            <div class="auth-alert">{{ error }}</div>
+            {% endif %}
+
+            {% if not store_configured %}
+            <div class="auth-alert">Supabase is not configured yet. Set <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</div>
+            {% endif %}
+
+            <form method="POST" class="auth-form">
+                <label class="auth-field">
+                    <span>Username</span>
+                    <input type="text" name="username" autocomplete="username" required>
+                </label>
+                <label class="auth-field">
+                    <span>Password</span>
+                    <input type="password" name="password" autocomplete="current-password" required>
+                </label>
+                <button class="auth-submit" type="submit">Login</button>
+            </form>
+
+            <div class="auth-footer">
+                <span>Need a member account?</span>
+                <a href="/register">Register</a>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

@@ -1,0 +1,6 @@
+.env
+__pycache__/
+flight/sq-profile/
+flight/references/
+_compact_check.png
+*.pyc

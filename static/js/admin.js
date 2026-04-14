@@ -81,6 +81,45 @@ function updateRegistrationPill(isEnabled) {
     registrationStatusPill.className = `status-pill ${isEnabled ? 'admin-on' : 'muted'}`;
 }
 
+function formatDetails(details) {
+    if (!details || typeof details !== 'object') return '';
+    return Object.entries(details).map(([key, value]) => {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        return `<div class="admin-log-detail-row"><span class="detail-label">${escapeHTML(label)}:</span> ${escapeHTML(String(value))}</div>`;
+    }).join('');
+}
+
+function truncate(str, max) {
+    if (!str) return '';
+    return str.length > max ? str.slice(0, max) + '...' : str;
+}
+
+function formatChatLogDetails(log) {
+    let html = '';
+    const req = log.request_payload || {};
+    const res = log.response_payload || {};
+
+    if (req.messages && Array.isArray(req.messages)) {
+        req.messages.forEach(msg => {
+            html += `<div class="admin-log-detail-row"><span class="detail-label">${escapeHTML((msg.role || '').charAt(0).toUpperCase() + (msg.role || '').slice(1))}:</span> ${escapeHTML(truncate(msg.content, 200))}</div>`;
+        });
+    }
+    if (req.model) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Model:</span> ${escapeHTML(req.model)}</div>`;
+    }
+    if (res.message) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Response:</span> ${escapeHTML(truncate(res.message, 200))}</div>`;
+    }
+    if (res.search_params && typeof res.search_params === 'object') {
+        const sp = res.search_params;
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Search:</span> ${escapeHTML(sp.origin || '')} &rarr; ${escapeHTML(sp.destination || '')} (${escapeHTML(sp.cabin || 'business')})</div>`;
+    }
+    if (res.flights && Array.isArray(res.flights)) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Results:</span> ${res.flights.length} flights found</div>`;
+    }
+    return html;
+}
+
 function renderAdminLogs(logs) {
     if (!adminLogList) return;
     if (!logs.length) {
@@ -94,7 +133,7 @@ function renderAdminLogs(logs) {
                 <span>${escapeHTML(log.admin_username || '')}</span>
                 <span>${escapeHTML(log.created_at || '')}</span>
             </div>
-            <pre>${escapeHTML(JSON.stringify(log.details || {}, null, 2))}</pre>
+            <div class="admin-log-details">${formatDetails(log.details)}</div>
         </div>
     `).join('');
 }
@@ -113,8 +152,7 @@ function renderChatLogs(logs) {
                 <span>${escapeHTML(log.session_id || 'local-session')}</span>
                 <span>${escapeHTML(log.created_at || '')}</span>
             </div>
-            <pre>${escapeHTML(JSON.stringify(log.request_payload || {}, null, 2))}</pre>
-            <pre>${escapeHTML(JSON.stringify(log.response_payload || {}, null, 2))}</pre>
+            <div class="admin-log-details">${formatChatLogDetails(log)}</div>
         </div>
     `).join('');
 }

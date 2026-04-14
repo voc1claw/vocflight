@@ -1567,8 +1567,7 @@ body {
     font-weight: 700;
 }
 
-.admin-table-wrap,
-.admin-log-list {
+.admin-table-wrap {
     overflow: auto;
     max-height: 560px;
 }
@@ -1587,9 +1586,37 @@ body {
     vertical-align: top;
 }
 
-.admin-log-list {
+.admin-card-fixed-logs {
+    display: flex;
+    flex-direction: column;
+    max-height: 600px;
+}
+
+.admin-log-box {
+    flex: 1 1 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: grid;
-    gap: 12px;
+    gap: 10px;
+    padding-right: 4px;
+    min-height: 0;
+}
+
+.admin-log-box::-webkit-scrollbar {
+    width: 6px;
+}
+
+.admin-log-box::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.admin-log-box::-webkit-scrollbar-thumb {
+    background: rgba(111, 91, 178, 0.18);
+    border-radius: 6px;
+}
+
+.admin-log-box::-webkit-scrollbar-thumb:hover {
+    background: rgba(111, 91, 178, 0.32);
 }
 
 .admin-log-item {
@@ -1603,21 +1630,26 @@ body {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     color: var(--ink-soft);
     font-size: 0.82rem;
 }
 
-.admin-log-item pre {
-    margin-top: 8px;
-    padding: 12px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.7);
-    white-space: pre-wrap;
-    word-break: break-word;
-    font-size: 0.78rem;
-    line-height: 1.5;
+.admin-log-details {
+    font-size: 0.82rem;
+    line-height: 1.6;
     color: var(--ink);
+}
+
+.admin-log-detail-row {
+    padding: 3px 0;
+    word-break: break-word;
+}
+
+.admin-log-detail-row .detail-label {
+    font-weight: 700;
+    color: var(--ink-soft);
+    margin-right: 4px;
 }
 
 .admin-empty {
@@ -1852,17 +1884,12 @@ body {
         letter-spacing: 0.08em;
     }
 
-    .admin-log-list {
-        max-height: none;
+    .admin-card-fixed-logs {
+        max-height: 500px;
     }
 
     .admin-log-item {
         padding: 12px;
-    }
-
-    .admin-log-item pre {
-        font-size: 0.72rem;
-        padding: 10px;
     }
 }
 

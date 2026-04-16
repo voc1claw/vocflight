@@ -1,6 +1,7 @@
 """Hardcoded rules and configuration. No external files needed."""
 
 import os
+import tempfile
 
 # Airlines that must NEVER appear in results
 BANNED_AIRLINES = {
@@ -35,15 +36,18 @@ MAX_FLIGHTS_PER_DIRECTION = 3
 AGENT_BROWSER = r"C:\Users\admin\AppData\Roaming\npm\node_modules\agent-browser\bin\agent-browser-win32-x64.exe"
 
 # Swoop retry settings
-SWOOP_MAX_RETRIES = 3
-SWOOP_RETRY_DELAY = 1.5  # seconds between retries (doubles each attempt)
+SWOOP_MAX_RETRIES = 2
+SWOOP_RETRY_DELAY = 0.5  # seconds between retries (doubles each attempt)
 SWOOP_INTER_SEARCH_DELAY = 0.1  # seconds between searches (minimal, swoop handles its own rate limits)
 
 # Parallel swoop search settings
-SWOOP_MAX_WORKERS = 15  # max concurrent swoop RPC threads (I/O-bound, safe up to ~25 on 2GB RAM)
+SWOOP_MAX_WORKERS = 12  # max concurrent swoop RPC threads (tuned for Render free tier 512MB)
 
-# Disk cache settings
-CACHE_DIR = r"C:\Users\admin\.openclaw\workspace\skills\flight\.cache"
+# Hard ceiling on one search phase before returning partial results
+SWOOP_PHASE_TIMEOUT_SECONDS = 50
+
+# Disk cache settings — use tempdir so it works on Linux (Render) and Windows
+CACHE_DIR = os.path.join(tempfile.gettempdir(), "vocflight_cache")
 CACHE_TTL_SECONDS = 1800  # 30 minutes
 
 # ---------------------------------------------------------------------------

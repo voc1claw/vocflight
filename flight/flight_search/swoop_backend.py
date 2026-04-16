@@ -5,7 +5,7 @@ import json
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from datetime import date
 
 from .parser import Flight, Layover, Segment
@@ -14,6 +14,7 @@ from .config import (
     SWOOP_RETRY_DELAY,
     SWOOP_INTER_SEARCH_DELAY,
     SWOOP_MAX_WORKERS,
+    SWOOP_PHASE_TIMEOUT_SECONDS,
     CACHE_DIR,
     CACHE_TTL_SECONDS,
 )
@@ -472,24 +473,32 @@ def search_swoop_parallel(
     max_stops: int | None = None,
     cabin: str = "business",
     use_cache: bool = True,
+    timeout: float | None = SWOOP_PHASE_TIMEOUT_SECONDS,
 ) -> dict[date, list[Flight]]:
-    """Search multiple dates in parallel using a thread pool."""
-    results: dict[date, list[Flight]] = {}
+    """Search multiple dates in parallel. Returns partial results if timeout hits."""
+    results: dict[date, list[Flight]] = {d: [] for d in dates}
 
     def _search_one(d: date) -> tuple[date, list[Flight]]:
         flights = search_swoop(origin, dest, d, max_stops=max_stops, cabin=cabin, use_cache=use_cache)
         return d, flights
 
-    with ThreadPoolExecutor(max_workers=SWOOP_MAX_WORKERS) as pool:
+    pool = ThreadPoolExecutor(max_workers=SWOOP_MAX_WORKERS)
+    try:
         futures = {pool.submit(_search_one, d): d for d in dates}
-        for future in as_completed(futures):
+        done, not_done = wait(futures, timeout=timeout)
+        for future in done:
             try:
                 d, flights = future.result()
                 results[d] = flights
             except Exception as e:
                 d = futures[future]
                 print(f"  [parallel search error for {d}: {e}]", file=sys.stderr)
-                results[d] = []
+        if not_done:
+            print(f"  [phase timeout: {len(not_done)}/{len(futures)} searches dropped]", file=sys.stderr)
+            for fut in not_done:
+                fut.cancel()
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
     return results
 
@@ -501,23 +510,31 @@ def search_swoop_roundtrip_parallel(
     max_stops: int | None = None,
     cabin: str = "business",
     use_cache: bool = True,
+    timeout: float | None = SWOOP_PHASE_TIMEOUT_SECONDS,
 ) -> dict[date, list[Flight]]:
-    """Search multiple RT date pairs in parallel. Keyed by departure date."""
-    results: dict[date, list[Flight]] = {}
+    """Search multiple RT date pairs in parallel. Returns partial results on timeout."""
+    results: dict[date, list[Flight]] = {dep: [] for dep, _ in date_pairs}
 
     def _search_one(dep: date, ret: date) -> tuple[date, list[Flight]]:
         flights = search_swoop_roundtrip(origin, dest, dep, ret, max_stops=max_stops, cabin=cabin, use_cache=use_cache)
         return dep, flights
 
-    with ThreadPoolExecutor(max_workers=SWOOP_MAX_WORKERS) as pool:
+    pool = ThreadPoolExecutor(max_workers=SWOOP_MAX_WORKERS)
+    try:
         futures = {pool.submit(_search_one, dep, ret): dep for dep, ret in date_pairs}
-        for future in as_completed(futures):
+        done, not_done = wait(futures, timeout=timeout)
+        for future in done:
             try:
                 d, flights = future.result()
                 results[d] = flights
             except Exception as e:
                 d = futures[future]
                 print(f"  [parallel RT search error for {d}: {e}]", file=sys.stderr)
-                results[d] = []
+        if not_done:
+            print(f"  [RT phase timeout: {len(not_done)}/{len(futures)} searches dropped]", file=sys.stderr)
+            for fut in not_done:
+                fut.cancel()
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
     return results

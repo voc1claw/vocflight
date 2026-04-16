@@ -185,11 +185,15 @@ SEARCH RULES
 - Even if a trip is round-trip, always check two separate one-way tickets
 - For round-trip queries, set return_after_days or return_date so BOTH directions are searched
 
-DATE RANGE EXPANSION:
-- "next week": 7 dates starting next Monday
-- "after DATE": DATE+1 through DATE+7
-- "early MONTH": 1st-10th, "mid MONTH": 11th-20th, "late MONTH": 21st-last
-- "anytime in MONTH": representative dates (1st, 5th, 10th, 15th, 20th, 25th)
+DATE RANGE EXPANSION (KEEP IT TIGHT — max 6 dates total, fewer is better):
+- "next week": up to 5 dates starting next Monday
+- "after DATE": DATE+1 through DATE+5 (5 dates max)
+- "early MONTH": 3 dates from the 1st-10th (e.g., 1st, 5th, 9th)
+- "mid MONTH": 3 dates from the 11th-20th (e.g., 12th, 16th, 19th)
+- "late MONTH": 3 dates from the 21st-end (e.g., 22nd, 26th, 29th)
+- "anytime in MONTH": 3 representative dates (1st, 15th, 28th) — NEVER more
+- Multi-month range (e.g., "July or August"): 2 dates per month, MAX 4 total
+- NEVER return more than 6 dates to the tool. 4 is ideal. Prefer fewer, well-chosen dates over many.
 - Always convert relative dates to specific YYYY-MM-DD based on today ({today})
 
 =====================
@@ -375,15 +379,22 @@ def bootstrap_payload(user):
     }
 
 
+TOP_DATES_FOR_ENRICHMENT = 3
+
+
 def execute_flight_search(params):
     """Run the actual flight search using existing swoop backend.
 
     Returns (outbound_flights, return_flights, round_trip_flights, error_string).
     return_flights and round_trip_flights are [] for one-way searches.
 
-    Outbound, return, and round-trip searches run in parallel for speed.
+    Staged search for speed:
+      Wave 1: outbound for ALL dates (parallel).
+      Wave 2: pick top N cheapest outbound dates, then search return + RT
+              only for those dates (parallel within the wave).
+    This caps worst-case wall time and guarantees the user sees the real cheapest combo.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 
     origin = _resolve_iata(params.get("origin", ""))
     dest = _resolve_iata(params.get("destination", ""))
@@ -424,50 +435,53 @@ def execute_flight_search(params):
             except ValueError:
                 pass
 
-    # --- Launch all searches in parallel ---
-    raw_outbound = {}
+    # --- Wave 1: outbound scan for ALL dates ---
+    try:
+        raw_outbound = search_swoop_parallel(origin, dest, dates, max_stops=max_stops, cabin=cabin)
+    except Exception as e:
+        return [], [], [], f"Search error: {e}"
+
+    # --- Wave 2: enrich only the top-N cheapest outbound dates ---
     raw_return = {}
     raw_round_trip = {}
 
-    def _search_outbound():
-        return search_swoop_parallel(origin, dest, dates, max_stops=max_stops, cabin=cabin)
+    if depart_to_return:
+        def _cheapest_price(flights):
+            prices = [f.price for f in flights if f.price is not None]
+            return min(prices) if prices else float("inf")
 
-    def _search_return():
-        if not depart_to_return:
-            return {}
-        return_dates = sorted(set(depart_to_return.values()))
-        return search_swoop_parallel(dest, origin, return_dates, max_stops=max_stops, cabin=cabin)
+        ranked = sorted(
+            raw_outbound.keys(),
+            key=lambda d: _cheapest_price(raw_outbound.get(d, [])),
+        )
+        # Prioritise dates that actually returned results; if none, fall back to the first few
+        top_dates = [d for d in ranked if raw_outbound.get(d)][:TOP_DATES_FOR_ENRICHMENT]
+        if not top_dates:
+            top_dates = ranked[:TOP_DATES_FOR_ENRICHMENT]
 
-    def _search_round_trip():
-        if not depart_to_return:
-            return {}
-        date_pairs = [(dep, depart_to_return[dep]) for dep in sorted(depart_to_return.keys())]
-        return search_swoop_roundtrip_parallel(origin, dest, date_pairs, max_stops=max_stops, cabin=cabin)
+        return_dates = sorted({depart_to_return[d] for d in top_dates})
+        rt_pairs = [(d, depart_to_return[d]) for d in top_dates]
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        fut_out = pool.submit(_search_outbound)
-        fut_ret = pool.submit(_search_return) if depart_to_return else None
-        fut_rt = pool.submit(_search_round_trip) if depart_to_return else None
+        def _search_return():
+            return search_swoop_parallel(dest, origin, return_dates, max_stops=max_stops, cabin=cabin)
 
-        try:
-            raw_outbound = fut_out.result()
-        except Exception as e:
-            return [], [], [], f"Search error: {e}"
+        def _search_round_trip():
+            return search_swoop_roundtrip_parallel(origin, dest, rt_pairs, max_stops=max_stops, cabin=cabin)
 
-        if fut_ret:
+        # Run the two remaining phases concurrently
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_ret = pool.submit(_search_return)
+            fut_rt = pool.submit(_search_round_trip)
             try:
                 raw_return = fut_ret.result()
             except Exception:
                 raw_return = {}
-
-        if fut_rt:
             try:
                 raw_round_trip = fut_rt.result()
             except Exception:
                 raw_round_trip = {}
 
     outbound_flights = _filter_and_limit(raw_outbound)
-
     return_flights = _filter_and_limit(raw_return) if raw_return else []
 
     round_trip_flights = []
@@ -1206,48 +1220,30 @@ def chat():
                 best = min(priced, key=lambda f: f["price"])
                 cheapest_price = f"{best.get('price_currency','$')}{best['price']:,.0f} on {best.get('airline','')}"
 
-        messages.append({
-            "role": "assistant",
-            "content": content or "Let me search for those flights.",
-        })
-        messages.append({
-            "role": "user",
-            "content": (
-                f"[SYSTEM: Flight search completed. {num_out} outbound and {num_ret} return flights found. "
-                f"{num_rt} round-trip promo fares found. "
-                f"Route: {origin} to {dest}. Cabin: {cabin}. "
-                f"{'Cheapest outbound: ' + cheapest_price + '. ' if cheapest_price else ''}"
-                "Write a SHORT response (3-4 sentences total, NO labels, NO headings, just flowing text):\n\n"
-                "Sentence 1-2: Briefly highlight the best deal found.\n"
-                "Sentence 3: A SHORT specific travel tip for this route (best layover airports, "
-                "day-of-week savings, alternate airports, airline product tips, connection warnings, "
-                "or booking timing). Make it useful and specific to this route.\n"
-                "Sentence 4: End with ONE follow-up question to help get better results, like: "
-                "'Want me to check nearby dates for a better price?' or "
-                "'Should I search nonstop-only options?' or "
-                "'Would you like me to compare with a different cabin?'\n\n"
-                "Do NOT use labels like 'PART 1' or 'INTRO'. Do NOT list flights. "
-                "Do NOT output JSON. Just write natural flowing sentences.]"
-            ),
-        })
-
-        intro_result = call_openrouter(messages, model)
-        intro_content = ""
-        if "choices" in intro_result:
-            intro_content = intro_result["choices"][0].get("message", {}).get("content", "")
-
-        # If AI still outputs JSON or garbage, use our formatted summary
-        if not intro_content:
-            intro_content = summary_content
-        else:
-            intro_content = intro_content.strip()
-            # Detect if AI dumped JSON instead of a real response
-            stripped = intro_content.lstrip()
-            if (stripped.startswith("{") or stripped.startswith("[") or
-                    '"action"' in intro_content[:100] or
-                    '"airline"' in intro_content[:100] or
-                    '```json' in intro_content[:50]):
-                intro_content = summary_content
+        # Skip the 2nd AI call — it added 3-10s of latency per search.
+        # Instead use the AI's own pre-search preamble (if any) or a hand-crafted line.
+        intro_content = (content or "").strip()
+        stripped = intro_content.lstrip() if intro_content else ""
+        looks_like_json = (
+            not intro_content
+            or stripped.startswith("{")
+            or stripped.startswith("[")
+            or '"action"' in intro_content[:100]
+            or '"airline"' in intro_content[:100]
+            or '```json' in intro_content[:50]
+        )
+        if looks_like_json:
+            if cheapest_price:
+                intro_content = (
+                    f"Found {num_out} outbound options for {origin} → {dest}. "
+                    f"Cheapest: {cheapest_price}. Full list and best combo below. "
+                    f"Want me to check nearby dates or nonstop-only options?"
+                )
+            else:
+                intro_content = (
+                    f"Here are the {origin} → {dest} options I found. "
+                    f"Want me to widen the date range or try nearby airports?"
+                )
 
         # Build best deal summary with booking links
         trip_analysis = build_trip_analysis(outbound, return_flights, round_trip_flights, search_params)

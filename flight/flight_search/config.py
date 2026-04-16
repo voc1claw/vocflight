@@ -40,7 +40,7 @@ SWOOP_RETRY_DELAY = 1.5  # seconds between retries (doubles each attempt)
 SWOOP_INTER_SEARCH_DELAY = 0.1  # seconds between searches (minimal, swoop handles its own rate limits)
 
 # Parallel swoop search settings
-SWOOP_MAX_WORKERS = 12  # max concurrent swoop RPC threads
+SWOOP_MAX_WORKERS = 15  # max concurrent swoop RPC threads (I/O-bound, safe up to ~25 on 2GB RAM)
 
 # Disk cache settings
 CACHE_DIR = r"C:\Users\admin\.openclaw\workspace\skills\flight\.cache"

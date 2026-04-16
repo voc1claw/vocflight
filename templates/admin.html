@@ -169,24 +169,42 @@
                         </div>
                         <div class="admin-log-details">
                             {% if log.request_payload is mapping %}
-                                {% if log.request_payload.messages %}
-                                    {% for msg in log.request_payload.messages %}
+                                {% if log.request_payload.prompt %}
+                                <div class="admin-log-detail-row"><span class="detail-label">Prompt:</span> {{ log.request_payload.prompt }}</div>
+                                {% elif log.request_payload.messages %}
+                                    {% for msg in log.request_payload.messages[-2:] %}
                                     <div class="admin-log-detail-row"><span class="detail-label">{{ msg.role|title }}:</span> {{ msg.content|truncate(200) }}</div>
                                     {% endfor %}
                                 {% endif %}
                                 {% if log.request_payload.model %}
                                 <div class="admin-log-detail-row"><span class="detail-label">Model:</span> {{ log.request_payload.model }}</div>
                                 {% endif %}
+                                {% if log.request_payload.message_count %}
+                                <div class="admin-log-detail-row"><span class="detail-label">Messages in conversation:</span> {{ log.request_payload.message_count }}</div>
+                                {% endif %}
                             {% endif %}
                             {% if log.response_payload is mapping %}
                                 {% if log.response_payload.message %}
-                                <div class="admin-log-detail-row"><span class="detail-label">Response:</span> {{ log.response_payload.message|truncate(200) }}</div>
+                                <div class="admin-log-detail-row"><span class="detail-label">Response:</span> {{ log.response_payload.message }}</div>
                                 {% endif %}
-                                {% if log.response_payload.search_params is mapping %}
+                                {% if log.response_payload.search is mapping %}
+                                <div class="admin-log-detail-row"><span class="detail-label">Search:</span> {{ log.response_payload.search.origin }} &rarr; {{ log.response_payload.search.destination }} ({{ log.response_payload.search.cabin|default('business') }}) {{ log.response_payload.search.dates|join(', ') }}</div>
+                                {% elif log.response_payload.search_params is mapping %}
                                 <div class="admin-log-detail-row"><span class="detail-label">Search:</span> {{ log.response_payload.search_params.origin }} &rarr; {{ log.response_payload.search_params.destination }} ({{ log.response_payload.search_params.cabin|default('business') }})</div>
                                 {% endif %}
-                                {% if log.response_payload.flights is not none %}
+                                {% if log.response_payload.outbound_count is defined %}
+                                <div class="admin-log-detail-row"><span class="detail-label">Results:</span> {{ log.response_payload.outbound_count }} outbound, {{ log.response_payload.return_count|default(0) }} return, {{ log.response_payload.rt_promo_count|default(0) }} RT promo</div>
+                                {% elif log.response_payload.flights is not none %}
                                 <div class="admin-log-detail-row"><span class="detail-label">Results:</span> {{ log.response_payload.flights|length }} flights found</div>
+                                {% endif %}
+                                {% if log.response_payload.best_deal %}
+                                <div class="admin-log-detail-row"><span class="detail-label">Best Deal:</span> {{ log.response_payload.best_deal }}</div>
+                                {% endif %}
+                                {% if log.response_payload.search_time_s %}
+                                <div class="admin-log-detail-row"><span class="detail-label">Search Time:</span> {{ log.response_payload.search_time_s }}s{% if log.response_payload.total_time_s %} (total: {{ log.response_payload.total_time_s }}s){% endif %}</div>
+                                {% endif %}
+                                {% if log.response_payload.error %}
+                                <div class="admin-log-detail-row"><span class="detail-label">Error:</span> {{ log.response_payload.error }}</div>
                                 {% endif %}
                             {% endif %}
                         </div>

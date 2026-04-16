@@ -99,23 +99,47 @@ function formatChatLogDetails(log) {
     const req = log.request_payload || {};
     const res = log.response_payload || {};
 
-    if (req.messages && Array.isArray(req.messages)) {
-        req.messages.forEach(msg => {
+    // New compact format
+    if (req.prompt) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Prompt:</span> ${escapeHTML(req.prompt)}</div>`;
+    } else if (req.messages && Array.isArray(req.messages)) {
+        // Legacy format fallback — show last 2 messages
+        req.messages.slice(-2).forEach(msg => {
             html += `<div class="admin-log-detail-row"><span class="detail-label">${escapeHTML((msg.role || '').charAt(0).toUpperCase() + (msg.role || '').slice(1))}:</span> ${escapeHTML(truncate(msg.content, 200))}</div>`;
         });
     }
     if (req.model) {
         html += `<div class="admin-log-detail-row"><span class="detail-label">Model:</span> ${escapeHTML(req.model)}</div>`;
     }
-    if (res.message) {
-        html += `<div class="admin-log-detail-row"><span class="detail-label">Response:</span> ${escapeHTML(truncate(res.message, 200))}</div>`;
+    if (req.message_count) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Conversation:</span> ${req.message_count} messages</div>`;
     }
-    if (res.search_params && typeof res.search_params === 'object') {
+    if (res.message) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Response:</span> ${escapeHTML(truncate(res.message, 300))}</div>`;
+    }
+    if (res.search && typeof res.search === 'object') {
+        const sp = res.search;
+        const dates = (sp.dates || []).join(', ');
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Search:</span> ${escapeHTML(sp.origin || '')} &rarr; ${escapeHTML(sp.destination || '')} (${escapeHTML(sp.cabin || 'business')}) ${escapeHTML(dates)}</div>`;
+    } else if (res.search_params && typeof res.search_params === 'object') {
         const sp = res.search_params;
         html += `<div class="admin-log-detail-row"><span class="detail-label">Search:</span> ${escapeHTML(sp.origin || '')} &rarr; ${escapeHTML(sp.destination || '')} (${escapeHTML(sp.cabin || 'business')})</div>`;
     }
-    if (res.flights && Array.isArray(res.flights)) {
+    if (res.outbound_count !== undefined) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Results:</span> ${res.outbound_count} outbound, ${res.return_count || 0} return, ${res.rt_promo_count || 0} RT promo</div>`;
+    } else if (res.flights && Array.isArray(res.flights)) {
         html += `<div class="admin-log-detail-row"><span class="detail-label">Results:</span> ${res.flights.length} flights found</div>`;
+    }
+    if (res.best_deal) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Best Deal:</span> ${escapeHTML(String(res.best_deal))}</div>`;
+    }
+    if (res.search_time_s) {
+        let timing = `${res.search_time_s}s`;
+        if (res.total_time_s) timing += ` (total: ${res.total_time_s}s)`;
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Timing:</span> ${timing}</div>`;
+    }
+    if (res.error) {
+        html += `<div class="admin-log-detail-row"><span class="detail-label">Error:</span> ${escapeHTML(res.error)}</div>`;
     }
     return html;
 }

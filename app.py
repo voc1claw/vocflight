@@ -1003,6 +1003,50 @@ def admin_logs_api():
     })
 
 
+def _build_log_payload(user_messages, model, user_context, response_payload, search_time=None):
+    """Build a compact log payload for Supabase — only the latest prompt + summary stats."""
+    latest_user_msg = ""
+    for m in reversed(user_messages):
+        if m.get("role") == "user":
+            latest_user_msg = m.get("content", "")
+            break
+
+    req_log = {
+        "prompt": latest_user_msg[:500],
+        "model": model,
+        "message_count": len(user_messages),
+    }
+    if user_context:
+        req_log["user_context"] = user_context[:200]
+
+    resp_log = {
+        "message": (response_payload.get("message") or "")[:500],
+    }
+    if response_payload.get("search_params"):
+        sp = response_payload["search_params"]
+        resp_log["search"] = {
+            "origin": sp.get("origin"),
+            "destination": sp.get("destination"),
+            "dates": sp.get("dates", []),
+            "cabin": sp.get("cabin", "business"),
+            "max_stops": sp.get("max_stops"),
+            "return_after_days": sp.get("return_after_days"),
+        }
+    if response_payload.get("flights") is not None:
+        resp_log["outbound_count"] = len(response_payload["flights"])
+    if response_payload.get("return_flights") is not None:
+        resp_log["return_count"] = len(response_payload["return_flights"])
+    if response_payload.get("round_trip_flights") is not None:
+        resp_log["rt_promo_count"] = len(response_payload["round_trip_flights"])
+    if response_payload.get("best_deal"):
+        bd = response_payload["best_deal"]
+        resp_log["best_deal"] = f"{bd.get('label', '')} {bd.get('total_formatted', '')}"
+    if search_time is not None:
+        resp_log["search_time_s"] = round(search_time, 1)
+
+    return req_log, resp_log
+
+
 @app.route("/api/chat", methods=["POST"])
 @login_required
 def chat():
@@ -1040,6 +1084,9 @@ def chat():
         })
     messages.extend(user_messages)
 
+    import time as _time
+    _t_start = _time.time()
+
     # Phase 1: Call AI
     result = call_openrouter(messages, model)
 
@@ -1054,13 +1101,15 @@ def chat():
             "best_deal": None,
         }
         if current_user and store.enabled:
+            req_log, resp_log = _build_log_payload(user_messages, model, user_context, response_payload)
+            resp_log["error"] = result["error"][:200]
             store.log_chat_event(
                 user_id=current_user["id"],
                 username=current_user["username"],
                 role=current_user["role"],
                 session_id=client_session_id,
-                request_payload={"messages": user_messages, "model": model, "user_context": user_context},
-                response_payload=response_payload,
+                request_payload=req_log,
+                response_payload=resp_log,
             )
         return jsonify(response_payload)
 
@@ -1086,7 +1135,9 @@ def chat():
 
     # If we have search params, execute the search
     if search_params:
+        _t_search = _time.time()
         outbound, return_flights, round_trip_flights, error = execute_flight_search(search_params)
+        _search_elapsed = _time.time() - _t_search
 
         if error:
             response_payload = {
@@ -1099,13 +1150,15 @@ def chat():
                 "best_deal": None,
             }
             if current_user and store.enabled:
+                req_log, resp_log = _build_log_payload(user_messages, model, user_context, response_payload, _search_elapsed)
+                resp_log["error"] = error[:200]
                 store.log_chat_event(
                     user_id=current_user["id"],
                     username=current_user["username"],
                     role=current_user["role"],
                     session_id=client_session_id,
-                    request_payload={"messages": user_messages, "model": model, "user_context": user_context},
-                    response_payload=response_payload,
+                    request_payload=req_log,
+                    response_payload=resp_log,
                 )
             return jsonify(response_payload)
 
@@ -1121,13 +1174,14 @@ def chat():
                 "best_deal": None,
             }
             if current_user and store.enabled:
+                req_log, resp_log = _build_log_payload(user_messages, model, user_context, response_payload, _search_elapsed)
                 store.log_chat_event(
                     user_id=current_user["id"],
                     username=current_user["username"],
                     role=current_user["role"],
                     session_id=client_session_id,
-                    request_payload={"messages": user_messages, "model": model, "user_context": user_context},
-                    response_payload=response_payload,
+                    request_payload=req_log,
+                    response_payload=resp_log,
                 )
             return jsonify(response_payload)
 
@@ -1209,13 +1263,16 @@ def chat():
             "best_deal": best_deal,
         }
         if current_user and store.enabled:
+            _total_elapsed = _time.time() - _t_start
+            req_log, resp_log = _build_log_payload(user_messages, model, user_context, response_payload, _search_elapsed)
+            resp_log["total_time_s"] = round(_total_elapsed, 1)
             store.log_chat_event(
                 user_id=current_user["id"],
                 username=current_user["username"],
                 role=current_user["role"],
                 session_id=client_session_id,
-                request_payload={"messages": user_messages, "model": model, "user_context": user_context},
-                response_payload=response_payload,
+                request_payload=req_log,
+                response_payload=resp_log,
             )
         return jsonify(response_payload)
 
@@ -1230,13 +1287,16 @@ def chat():
         "best_deal": None,
     }
     if current_user and store.enabled:
+        _total_elapsed = _time.time() - _t_start
+        req_log, resp_log = _build_log_payload(user_messages, model, user_context, response_payload)
+        resp_log["total_time_s"] = round(_total_elapsed, 1)
         store.log_chat_event(
             user_id=current_user["id"],
             username=current_user["username"],
             role=current_user["role"],
             session_id=client_session_id,
-            request_payload={"messages": user_messages, "model": model, "user_context": user_context},
-            response_payload=response_payload,
+            request_payload=req_log,
+            response_payload=resp_log,
         )
     return jsonify(response_payload)
 

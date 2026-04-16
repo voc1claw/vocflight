@@ -17,13 +17,13 @@ ALL_MODELS = [
     {"id": "qwen/qwen3.6-plus", "label": "Qwen 3.6 Plus", "tier": "mid"},
     {"id": "minimax/minimax-m2.7", "label": "MiniMax M2.7", "tier": "mid"},
     {"id": "anthropic/claude-opus-4.6", "label": "Claude Opus 4.6", "tier": "high"},
-    {"id": "anthropic/claude-sonnet-4.6", "label": "Claude Sonnet 4.6", "tier": "high"},
+    {"id": "anthropic/claude-opus-4.7", "label": "Claude Opus 4.7", "tier": "high"},
     {"id": "openai/gpt-5.4", "label": "GPT 5.4", "tier": "high"},
 ]
 
 DEFAULT_ENABLED_MODEL_IDS = [
     "openai/gpt-5.4",
-    "anthropic/claude-sonnet-4.6",
+    "anthropic/claude-opus-4.7",
     "openrouter/elephant-alpha",
 ]
 

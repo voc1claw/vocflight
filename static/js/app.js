@@ -8,7 +8,7 @@ const MODEL_TIERS = {
     'qwen/qwen3.6-plus': 'mid',
     'minimax/minimax-m2.7': 'mid',
     'anthropic/claude-opus-4.6': 'high',
-    'anthropic/claude-sonnet-4.6': 'high',
+    'anthropic/claude-opus-4.7': 'high',
     'openai/gpt-5.4': 'high',
 };
 

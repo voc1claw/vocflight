@@ -380,7 +380,11 @@ def execute_flight_search(params):
 
     Returns (outbound_flights, return_flights, round_trip_flights, error_string).
     return_flights and round_trip_flights are [] for one-way searches.
+
+    Outbound, return, and round-trip searches run in parallel for speed.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     origin = _resolve_iata(params.get("origin", ""))
     dest = _resolve_iata(params.get("destination", ""))
     date_strs = params.get("dates", [])
@@ -408,19 +412,9 @@ def execute_flight_search(params):
             serialized.extend(serialize_flights(flights[:limit_per_date]))
         return serialized
 
-    # --- Outbound search ---
-    try:
-        raw = search_swoop_parallel(origin, dest, dates, max_stops=max_stops, cabin=cabin)
-    except Exception as e:
-        return [], [], [], f"Search error: {e}"
-
-    outbound_flights = _filter_and_limit(raw)
-
-    # --- Return search (if round-trip) ---
-    return_flights = []
-    round_trip_flights = []
+    # Build return date mapping
+    depart_to_return = {}
     if not is_one_way:
-        depart_to_return = {}
         if return_after_days:
             depart_to_return = {d: d + timedelta(days=return_after_days) for d in dates}
         elif return_date_str:
@@ -430,36 +424,61 @@ def execute_flight_search(params):
             except ValueError:
                 pass
 
-        if depart_to_return:
-            return_dates = sorted(set(depart_to_return.values()))
+    # --- Launch all searches in parallel ---
+    raw_outbound = {}
+    raw_return = {}
+    raw_round_trip = {}
+
+    def _search_outbound():
+        return search_swoop_parallel(origin, dest, dates, max_stops=max_stops, cabin=cabin)
+
+    def _search_return():
+        if not depart_to_return:
+            return {}
+        return_dates = sorted(set(depart_to_return.values()))
+        return search_swoop_parallel(dest, origin, return_dates, max_stops=max_stops, cabin=cabin)
+
+    def _search_round_trip():
+        if not depart_to_return:
+            return {}
+        date_pairs = [(dep, depart_to_return[dep]) for dep in sorted(depart_to_return.keys())]
+        return search_swoop_roundtrip_parallel(origin, dest, date_pairs, max_stops=max_stops, cabin=cabin)
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_out = pool.submit(_search_outbound)
+        fut_ret = pool.submit(_search_return) if depart_to_return else None
+        fut_rt = pool.submit(_search_round_trip) if depart_to_return else None
+
+        try:
+            raw_outbound = fut_out.result()
+        except Exception as e:
+            return [], [], [], f"Search error: {e}"
+
+        if fut_ret:
             try:
-                raw_return = search_swoop_parallel(dest, origin, return_dates, max_stops=max_stops, cabin=cabin)
-            except Exception as e:
-                # Return search failed, but outbound succeeded - partial results OK
+                raw_return = fut_ret.result()
+            except Exception:
                 raw_return = {}
 
-            return_flights = _filter_and_limit(raw_return)
-
-            date_pairs = [(dep, depart_to_return[dep]) for dep in sorted(depart_to_return.keys())]
+        if fut_rt:
             try:
-                raw_round_trip = search_swoop_roundtrip_parallel(
-                    origin,
-                    dest,
-                    date_pairs,
-                    max_stops=max_stops,
-                    cabin=cabin,
-                )
+                raw_round_trip = fut_rt.result()
             except Exception:
                 raw_round_trip = {}
 
-            for dep_date in sorted(raw_round_trip.keys()):
-                flights = raw_round_trip.get(dep_date, [])
-                flights = apply_all_filters(flights, max_stops=max_stops, excluded_routing=excluded_routing)
-                flights.sort(key=lambda f: f.price if f.price is not None else float("inf"))
-                serialized = serialize_flights(flights[:3])
-                for flight in serialized:
-                    flight["return_date"] = depart_to_return[dep_date].isoformat()
-                round_trip_flights.extend(serialized)
+    outbound_flights = _filter_and_limit(raw_outbound)
+
+    return_flights = _filter_and_limit(raw_return) if raw_return else []
+
+    round_trip_flights = []
+    for dep_date in sorted(raw_round_trip.keys()):
+        flights = raw_round_trip.get(dep_date, [])
+        flights = apply_all_filters(flights, max_stops=max_stops, excluded_routing=excluded_routing)
+        flights.sort(key=lambda f: f.price if f.price is not None else float("inf"))
+        serialized = serialize_flights(flights[:3])
+        for flight in serialized:
+            flight["return_date"] = depart_to_return[dep_date].isoformat()
+        round_trip_flights.extend(serialized)
 
     return outbound_flights, return_flights, round_trip_flights, None
 

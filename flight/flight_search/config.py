@@ -37,10 +37,10 @@ AGENT_BROWSER = r"C:\Users\admin\AppData\Roaming\npm\node_modules\agent-browser\
 # Swoop retry settings
 SWOOP_MAX_RETRIES = 3
 SWOOP_RETRY_DELAY = 1.5  # seconds between retries (doubles each attempt)
-SWOOP_INTER_SEARCH_DELAY = 0.5  # seconds between sequential searches to avoid rate limits
+SWOOP_INTER_SEARCH_DELAY = 0.1  # seconds between searches (minimal, swoop handles its own rate limits)
 
 # Parallel swoop search settings
-SWOOP_MAX_WORKERS = 5  # max concurrent swoop RPC threads
+SWOOP_MAX_WORKERS = 12  # max concurrent swoop RPC threads
 
 # Disk cache settings
 CACHE_DIR = r"C:\Users\admin\.openclaw\workspace\skills\flight\.cache"

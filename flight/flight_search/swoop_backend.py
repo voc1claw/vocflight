@@ -478,7 +478,6 @@ def search_swoop_parallel(
 
     def _search_one(d: date) -> tuple[date, list[Flight]]:
         flights = search_swoop(origin, dest, d, max_stops=max_stops, cabin=cabin, use_cache=use_cache)
-        time.sleep(SWOOP_INTER_SEARCH_DELAY)
         return d, flights
 
     with ThreadPoolExecutor(max_workers=SWOOP_MAX_WORKERS) as pool:
@@ -508,7 +507,6 @@ def search_swoop_roundtrip_parallel(
 
     def _search_one(dep: date, ret: date) -> tuple[date, list[Flight]]:
         flights = search_swoop_roundtrip(origin, dest, dep, ret, max_stops=max_stops, cabin=cabin, use_cache=use_cache)
-        time.sleep(SWOOP_INTER_SEARCH_DELAY)
         return dep, flights
 
     with ThreadPoolExecutor(max_workers=SWOOP_MAX_WORKERS) as pool:

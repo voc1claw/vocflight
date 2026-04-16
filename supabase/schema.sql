@@ -14,7 +14,7 @@ create table if not exists public.app_config (
     id text primary key,
     registration_enabled boolean not null default true,
     registration_password_hash text,
-    enabled_models text[] not null default array['openai/gpt-5.4', 'anthropic/claude-sonnet-4.6', 'openrouter/elephant-alpha'],
+    enabled_models text[] not null default array['openai/gpt-5.4', 'anthropic/claude-opus-4.7', 'openrouter/elephant-alpha'],
     updated_at timestamptz not null default now()
 );
 
@@ -49,7 +49,7 @@ values (
     'main',
     true,
     null,
-    array['openai/gpt-5.4', 'anthropic/claude-sonnet-4.6', 'openrouter/elephant-alpha']
+    array['openai/gpt-5.4', 'anthropic/claude-opus-4.7', 'openrouter/elephant-alpha']
 )
 on conflict (id) do update
 set

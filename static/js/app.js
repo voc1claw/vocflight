@@ -113,7 +113,20 @@ const Memory = {
         catch { return []; }
     },
     saveSessions(sessions) {
-        localStorage.setItem(this.storageKey('SESSIONS'), JSON.stringify(sessions));
+        const data = JSON.stringify(sessions);
+        try {
+            localStorage.setItem(this.storageKey('SESSIONS'), data);
+        } catch (e) {
+            // localStorage full — trim oldest sessions and retry
+            console.warn('localStorage full, trimming old sessions:', e);
+            while (sessions.length > 1) {
+                sessions.pop();
+                try {
+                    localStorage.setItem(this.storageKey('SESSIONS'), JSON.stringify(sessions));
+                    return;
+                } catch (_) { /* keep trimming */ }
+            }
+        }
     },
     getActiveId() {
         return localStorage.getItem(this.storageKey('ACTIVE')) || null;
@@ -165,7 +178,7 @@ const Memory = {
     getModel() { return localStorage.getItem(this.storageKey('MODEL')) || 'openai/gpt-5.4'; },
     saveModel(m) { localStorage.setItem(this.storageKey('MODEL'), m); },
     resetAll() {
-        localStorage.removeItem(STORAGE_KEYS.PREFS);
+        localStorage.removeItem(this.storageKey('PREFS'));
         localStorage.removeItem(this.storageKey('SESSIONS'));
         localStorage.removeItem(this.storageKey('ACTIVE'));
         localStorage.removeItem(this.storageKey('MODEL'));
@@ -356,12 +369,48 @@ function loadSession(id) {
     scrollToBottom();
 }
 
+function compactMessageForStorage(m) {
+    if (m.role !== 'assistant') return m;
+    // Strip heavy flight data arrays — keep only summary info for session restore
+    const compact = { role: m.role, content: m.content, isError: m.isError || false };
+    if (m.search_params) compact.search_params = m.search_params;
+    if (m.best_deal) compact.best_deal = m.best_deal;
+    if (m.trip_analysis) compact.trip_analysis = m.trip_analysis;
+    // Store flight count instead of full arrays (saves ~90% space)
+    if (m.flights) compact.flights = m.flights.map(f => ({
+        airline: f.airline, price: f.price, price_currency: f.price_currency,
+        departure_time: f.departure_time, arrival_time: f.arrival_time,
+        departure_airport: f.departure_airport, arrival_airport: f.arrival_airport,
+        duration: f.duration, stops: f.stops, departure_date: f.departure_date,
+        flight_numbers: f.flight_numbers,
+        layovers: (f.layovers || []).map(l => ({ duration: l.duration, code: l.code })),
+    }));
+    if (m.return_flights) compact.return_flights = m.return_flights.map(f => ({
+        airline: f.airline, price: f.price, price_currency: f.price_currency,
+        departure_time: f.departure_time, arrival_time: f.arrival_time,
+        departure_airport: f.departure_airport, arrival_airport: f.arrival_airport,
+        duration: f.duration, stops: f.stops, departure_date: f.departure_date,
+        flight_numbers: f.flight_numbers,
+        layovers: (f.layovers || []).map(l => ({ duration: l.duration, code: l.code })),
+    }));
+    if (m.round_trip_flights) compact.round_trip_flights = m.round_trip_flights.map(f => ({
+        airline: f.airline, price: f.price, price_currency: f.price_currency,
+        departure_time: f.departure_time, arrival_time: f.arrival_time,
+        departure_airport: f.departure_airport, arrival_airport: f.arrival_airport,
+        duration: f.duration, stops: f.stops, departure_date: f.departure_date,
+        return_date: f.return_date, flight_numbers: f.flight_numbers,
+        layovers: (f.layovers || []).map(l => ({ duration: l.duration, code: l.code })),
+    }));
+    return compact;
+}
+
 function saveCurrentSession() {
     if (!state.activeSessionId) return;
     let title = 'New Session';
     const firstUser = state.messages.find(m => m.role === 'user');
     if (firstUser) title = firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? '...' : '');
-    Memory.updateSession(state.activeSessionId, { messages: state.messages, title });
+    const compactMessages = state.messages.map(compactMessageForStorage);
+    Memory.updateSession(state.activeSessionId, { messages: compactMessages, title });
 }
 
 function renderSessionList() {
